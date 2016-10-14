@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">mcc-uebung3</string>
+    <string name="notification_text">Wiedergabe</string>
+    <string name="notification_title">AudioPlayer</string>
 </resources>

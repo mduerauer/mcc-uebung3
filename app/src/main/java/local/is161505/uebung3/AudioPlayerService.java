@@ -1,26 +1,29 @@
 package local.is161505.uebung3;
 
+import android.app.Notification;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Build;
 import android.os.IBinder;
+import android.provider.SyncStateContract;
 import android.util.Log;
 
 import java.io.IOException;
-import java.util.Random;
 
-public class AudioPlayerService extends Service implements MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener  {
+public class AudioPlayerService extends Service implements MediaPlayer.OnPreparedListener, MediaPlayer.OnErrorListener, MediaPlayer.OnCompletionListener  {
 
     private static final String LOG_TAG = AudioPlayerService.class.getSimpleName();
+
+    public static final int ONGOING_NOTIFICATION_ID = 254;
 
     private final String mFilePath = "file:///sdcard/Music/test.mp3";
 
     private final IBinder mBinder = new LocalBinder();
-
-    private final Random mGenerator = new Random();
 
     private MediaPlayer mMediaPlayer;
 
@@ -29,6 +32,8 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
     public AudioPlayerPlayState getPlayState() {
         return mPlayState;
     }
+
+    private Notification mForegroundNotification;
 
     @Override
     public void onPrepared(MediaPlayer player) {
@@ -43,6 +48,12 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
         return false;
     }
 
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+        mMediaPlayer.stop();
+        mPlayState = AudioPlayerPlayState.STOPPED;
+    }
+
     public class LocalBinder extends Binder {
         AudioPlayerService getService() {
             Log.v(LOG_TAG, "LocalBinder.getService() called.");
@@ -50,14 +61,26 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
         }
     }
 
-    public AudioPlayerService() {
-        Log.v(LOG_TAG, "AudioPlayerService default constructor called.");
-    }
-
     @Override
     public void onCreate() {
         Log.v(LOG_TAG, "onCreate() called.");
         super.onCreate();
+
+        if(Build.VERSION.SDK_INT > 15) {
+            mForegroundNotification = new Notification.Builder(this)
+                    .setContentTitle(getString(R.string.notification_title))
+                    .setContentText(getString(R.string.notification_text))
+                    .setSmallIcon(R.drawable.ic_headset_black_24dp)
+                    .setOngoing(true)
+                    .build();
+        } else {
+            mForegroundNotification = new Notification.Builder(this)
+                    .setContentTitle(getString(R.string.notification_title))
+                    .setContentText(getString(R.string.notification_text))
+                    .setSmallIcon(R.drawable.ic_headset_black_24dp)
+                    .setOngoing(true)
+                    .getNotification();
+        }
 
         try {
             mMediaPlayer = new MediaPlayer();
@@ -65,6 +88,7 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
             mMediaPlayer.setDataSource(getApplicationContext(), Uri.parse(mFilePath));
             mMediaPlayer.setOnPreparedListener(this);
             mMediaPlayer.setOnErrorListener(this);
+            mMediaPlayer.setOnCompletionListener(this);
         } catch(IOException ex) {
             Log.e(LOG_TAG, "Can't access file: " + mFilePath);
         }
@@ -81,8 +105,6 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.v(LOG_TAG, "onStartCommand() called.");
 
-
-
         return START_STICKY;
     }
 
@@ -94,6 +116,8 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
 
     public AudioPlayerPlayState playMusic() {
         Log.v(LOG_TAG, "playMusic() called.");
+
+        startForeground(ONGOING_NOTIFICATION_ID, mForegroundNotification);
 
         if(mPlayState == AudioPlayerPlayState.STOPPED) {
             mMediaPlayer.prepareAsync();
@@ -111,6 +135,8 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
     public AudioPlayerPlayState stopMusic() {
         Log.v(LOG_TAG, "stopMusic() called.");
 
+        stopForeground(true);
+
         if(mPlayState == AudioPlayerPlayState.PLAYING || mPlayState == AudioPlayerPlayState.PAUSED) {
             mMediaPlayer.stop();
             mPlayState = AudioPlayerPlayState.STOPPED;
@@ -120,7 +146,7 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
     }
 
     public AudioPlayerPlayState pauseMusic() {
-        Log.v(LOG_TAG, "stopMusic() called.");
+        Log.v(LOG_TAG, "pauseMusic() called.");
 
         if(mMediaPlayer.isPlaying()) {
             mMediaPlayer.pause();
@@ -131,11 +157,9 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
     }
 
     public AudioPlayerPosition getPosition() {
-        Log.v(LOG_TAG, "getPosition() called.");
-
         int pos = 0, dur = 0;
 
-        if(mPlayState != AudioPlayerPlayState.STOPPED) {
+        if(mMediaPlayer.isPlaying()) {
             dur = mMediaPlayer.getDuration();
             pos = mMediaPlayer.getCurrentPosition();
         }
@@ -144,6 +168,7 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
     }
 
     public void seekTo(int pos) {
+        Log.v(LOG_TAG, "seekTo() called.");
         mMediaPlayer.seekTo(pos);
     }
 }

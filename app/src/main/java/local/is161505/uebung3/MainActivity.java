@@ -35,7 +35,6 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             try {
-                Log.v(LOG_TAG, "Updating mUiPositionSlider position");
                 updateSliderPosition();
             } finally {
                 mHandler.postDelayed(mSliderUpdater, PAUSE_FOR_MILLIS);
@@ -82,22 +81,16 @@ public class MainActivity extends AppCompatActivity {
                 new SeekBar.OnSeekBarChangeListener() {
                     @Override
                     public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                        Log.d(LOG_TAG, "onProgressChanged() called.");
                         if(fromUser) {
                             updatePosition(progress);
                         }
                     }
 
                     @Override
-                    public void onStartTrackingTouch(SeekBar seekBar) {
-                        Log.v(LOG_TAG, "onStartTrackingTouch() called.");
-                    }
+                    public void onStartTrackingTouch(SeekBar seekBar) { }
 
                     @Override
-                    public void onStopTrackingTouch(SeekBar seekBar) {
-                        Log.v(LOG_TAG, "onStopTrackingTouch() called.");
-
-                    }
+                    public void onStopTrackingTouch(SeekBar seekBar) { }
                 }
         );
 
@@ -114,21 +107,50 @@ public class MainActivity extends AppCompatActivity {
     protected void onStart() {
         Log.d(LOG_TAG, "onStart() called.");
         super.onStart();
+
+        // Bind to Service
+        if(!mBound) {
+            bindAudioPlayerService();
+        }
+    }
+
+    private void bindAudioPlayerService() {
         // Bind to LocalService
         Intent intent = new Intent(this, AudioPlayerService.class);
+        startService(intent);
         bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
     }
+
 
     @Override
     protected void onStop() {
         Log.d(LOG_TAG, "onStop() called.");
         super.onStop();
 
+        // Unbind service
         if (mBound) {
             unbindService(mConnection);
             mBound = false;
         }
 
+    }
+
+    @Override
+    protected void onResume() {
+        Log.d(LOG_TAG, "onResume() called.");
+        super.onResume();
+
+        // Rebind service
+        if(!mBound) {
+            bindAudioPlayerService();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        Log.d(LOG_TAG, "onDestroy() called.");
+        super.onDestroy();
+        stopSliderUpdater();
     }
 
     private void playMusic() {
@@ -181,14 +203,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void stopSliderUpdater() {
-        Log.d(LOG_TAG, "startSliderUpdater() called.");
+        Log.d(LOG_TAG, "stopSliderUpdater() called.");
 
         mHandler.removeCallbacks(mSliderUpdater);
     }
 
     private void updateSliderPosition() {
-        Log.v(LOG_TAG, "updateSliderPosition() called.");
-
         AudioPlayerPosition position = null;
 
         if(mBound) {
@@ -211,9 +231,16 @@ public class MainActivity extends AppCompatActivity {
                                        IBinder service) {
             Log.d(LOG_TAG, "onServiceConnected() called.");
 
-            // We've bound to LocalService, cast the IBinder and get LocalService instance
             AudioPlayerService.LocalBinder binder = (AudioPlayerService.LocalBinder) service;
             mAudioPlayerService = binder.getService();
+
+            mPlayState = mAudioPlayerService.getPlayState();
+
+            updateSliderPosition();
+            if(mPlayState == AudioPlayerPlayState.PLAYING) {
+                startSliderUpdater();
+            }
+
             mBound = true;
         }
 
@@ -222,11 +249,4 @@ public class MainActivity extends AppCompatActivity {
             mBound = false;
         }
     };
-
-    @Override
-    protected void onDestroy() {
-        Log.d(LOG_TAG, "onDestroy() called.");
-        super.onDestroy();
-        stopSliderUpdater();
-    }
 }
