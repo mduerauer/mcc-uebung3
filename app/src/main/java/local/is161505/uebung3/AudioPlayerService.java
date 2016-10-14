@@ -10,7 +10,6 @@ import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
-import android.provider.SyncStateContract;
 import android.util.Log;
 
 import java.io.IOException;
@@ -66,12 +65,19 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
         Log.v(LOG_TAG, "onCreate() called.");
         super.onCreate();
 
+
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0,
+                notificationIntent, 0);
+
+
         if(Build.VERSION.SDK_INT > 15) {
             mForegroundNotification = new Notification.Builder(this)
                     .setContentTitle(getString(R.string.notification_title))
                     .setContentText(getString(R.string.notification_text))
                     .setSmallIcon(R.drawable.ic_headset_black_24dp)
                     .setOngoing(true)
+                    .setContentIntent(pendingIntent)
                     .build();
         } else {
             mForegroundNotification = new Notification.Builder(this)
@@ -79,6 +85,7 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
                     .setContentText(getString(R.string.notification_text))
                     .setSmallIcon(R.drawable.ic_headset_black_24dp)
                     .setOngoing(true)
+                    .setContentIntent(pendingIntent)
                     .getNotification();
         }
 
