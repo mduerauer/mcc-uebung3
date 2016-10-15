@@ -11,6 +11,7 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.IOException;
 
@@ -26,6 +27,10 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
 
     private MediaPlayer mMediaPlayer;
 
+    private boolean mDataSourceSet = false;
+
+    private boolean mPrepared = false;
+
     private AudioPlayerPlayState mPlayState = AudioPlayerPlayState.STOPPED;
 
     public AudioPlayerPlayState getPlayState() {
@@ -36,6 +41,7 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
 
     @Override
     public void onPrepared(MediaPlayer player) {
+        mPrepared = true;
         if(mPlayState == AudioPlayerPlayState.PLAYING) {
             player.start();
         }
@@ -49,8 +55,12 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
 
     @Override
     public void onCompletion(MediaPlayer mp) {
+
         mMediaPlayer.stop();
         mPlayState = AudioPlayerPlayState.STOPPED;
+        mPrepared = false;
+
+        stopForeground(true);
     }
 
     public class LocalBinder extends Binder {
@@ -89,16 +99,11 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
                     .getNotification();
         }
 
-        try {
             mMediaPlayer = new MediaPlayer();
             mMediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            mMediaPlayer.setDataSource(getApplicationContext(), Uri.parse(mFilePath));
             mMediaPlayer.setOnPreparedListener(this);
             mMediaPlayer.setOnErrorListener(this);
             mMediaPlayer.setOnCompletionListener(this);
-        } catch(IOException ex) {
-            Log.e(LOG_TAG, "Can't access file: " + mFilePath);
-        }
 
     }
 
@@ -127,8 +132,22 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
         startForeground(ONGOING_NOTIFICATION_ID, mForegroundNotification);
 
         if(mPlayState == AudioPlayerPlayState.STOPPED) {
-            mMediaPlayer.prepareAsync();
+
+            if(!mDataSourceSet) {
+                try {
+                    mMediaPlayer.setDataSource(getApplicationContext(), Uri.parse(mFilePath));
+                    mDataSourceSet = true;
+                } catch (IOException ex) {
+                    Toast.makeText(this, "Can't access file: " + mFilePath, Toast.LENGTH_LONG).show();
+                    return AudioPlayerPlayState.STOPPED;
+                }
+            }
+
             mPlayState = AudioPlayerPlayState.PLAYING;
+            if(!mPrepared) {
+                mMediaPlayer.prepareAsync();
+            }
+
         } else if(mPlayState == AudioPlayerPlayState.PAUSED) {
             mPlayState = AudioPlayerPlayState.PLAYING;
             mMediaPlayer.start();
@@ -147,6 +166,7 @@ public class AudioPlayerService extends Service implements MediaPlayer.OnPrepare
         if(mPlayState == AudioPlayerPlayState.PLAYING || mPlayState == AudioPlayerPlayState.PAUSED) {
             mMediaPlayer.stop();
             mPlayState = AudioPlayerPlayState.STOPPED;
+            mPrepared = false;
         }
 
         return mPlayState;

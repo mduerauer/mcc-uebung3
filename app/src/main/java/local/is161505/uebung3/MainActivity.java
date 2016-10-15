@@ -1,12 +1,16 @@
 package local.is161505.uebung3;
 
+import android.Manifest;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
@@ -19,6 +23,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int PAUSE_FOR_MILLIS = 250;
 
+    private static final int MY_PERMISSIONS_READ_EXTERNAL_STORAGE = 123;
+
     private static final String LOG_TAG = MainActivity.class.getSimpleName();
 
     private AudioPlayerService mAudioPlayerService;
@@ -30,6 +36,8 @@ public class MainActivity extends AppCompatActivity {
     private AudioPlayerPlayState mPlayState = AudioPlayerPlayState.STOPPED;
 
     private SeekBar mUiPositionSlider = null;
+
+    private boolean mHasPermissions = false;
 
     private Runnable mSliderUpdater = new Runnable() {
         @Override
@@ -96,6 +104,47 @@ public class MainActivity extends AppCompatActivity {
 
         mHandler = new Handler();
 
+        checkPermissions();
+
+    }
+
+    private void checkPermissions() {
+        // Here, thisActivity is the current activity
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.READ_EXTERNAL_STORAGE
+                    },
+                    MY_PERMISSIONS_READ_EXTERNAL_STORAGE);
+        } else {
+            mHasPermissions = true;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case MY_PERMISSIONS_READ_EXTERNAL_STORAGE: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)  {
+                    mHasPermissions = true;
+                } else {
+
+                    Log.e(LOG_TAG, "Permissions not granted.");
+                    Toast.makeText(this, "Permissions not granted!", Toast.LENGTH_LONG).show();
+                    mHasPermissions = false;
+                }
+                return;
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request
+        }
     }
 
     private void updatePosition(int position) {
@@ -155,6 +204,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void playMusic() {
         Log.d(LOG_TAG, "playMusic() called.");
+
+        if(!mHasPermissions) {
+
+            Toast.makeText(this, "Permissions not granted!", Toast.LENGTH_LONG).show();
+            return;
+        }
 
         if (mBound) {
             mPlayState = mAudioPlayerService.playMusic();
